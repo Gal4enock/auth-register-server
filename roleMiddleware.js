@@ -13,7 +13,7 @@ module.exports = function (roles) {
 
       let hasRoles = false;
       userRoles.forEach(role => {
-        if (roles.includes(role)) {
+        if (roles.includes(role.value)) {
           hasRoles = true;
         }
       })

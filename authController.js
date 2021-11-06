@@ -2,7 +2,6 @@ const bcrypt = require('bcrypt');
 const { validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const User = require('./Models/User');
-const Role = require('./Models/Role');
 const { secret } = require('./config');
 
 const accessToken = (id, roles) => {
@@ -13,7 +12,7 @@ const accessToken = (id, roles) => {
   return jwt.sign(payload, secret, { expiresIn: '24h' });
 }
 class AuthController {
-  async registration(req, res) {
+  async registrationAdmin(req, res) {
     try {
       const err = validationResult(req);
 
@@ -29,8 +28,7 @@ class AuthController {
       };
 
       const hashPassword = bcrypt.hashSync(password, 3);
-      const userRole = new Role({ value: "USER" });
-      const user = new User({ username, password: hashPassword, roles: [userRole] });
+      const user = new User({ username, password: hashPassword, roles: [{ value: "ADMIN" }] });
 
       await user.save();
       return res.status(200).json(user);
@@ -38,6 +36,63 @@ class AuthController {
       res.status(400).json({ message: 'registration error' });
     }
   }
+
+    async registrationUser(req, res) {
+    try {
+      const err = validationResult(req);
+
+      if (!err.isEmpty()) {
+        return res.status(400).json({ message: "registration validation error", err });
+      };
+
+      const { username, password } = req.body;
+      const doubleUser = await User.findOne({ username });
+
+      if (doubleUser) {
+        return res.status(400).json({ message: 'user already exist' });
+      };
+
+      const hashPassword = bcrypt.hashSync(password, 3);
+      const user = new User({ username, password: hashPassword, roles: [{ value: "USER" }] });
+
+      await user.save();
+      return res.status(200).json(user);
+    } catch(err) {
+      res.status(400).json({ message: 'registration error' });
+    }
+  }
+
+    async registrationBoss(req, res) {
+    try {
+      const err = validationResult(req);
+
+      if (!err.isEmpty()) {
+        return res.status(400).json({ message: "registration validation error", err });
+      };
+
+      const { username, password, subordinates } = req.body;
+      const doubleUser = await User.findOne({ username });
+
+      if (doubleUser) {
+        return res.status(400).json({ message: 'user already exist' });
+      };
+      subordinates.forEach( async (subordinate) => {
+        const isUserCreated = await User.findOne({ username: subordinate });
+        if (!isUserCreated) {
+          const hashSubPassword = bcrypt.hashSync("Start123", 3);
+          const subordinateUser = new User({ username: subordinate, password: hashSubPassword, roles: [{ value: "USER", boss: username }] });
+          await subordinateUser.save();
+        }
+      });
+      const hashPassword = bcrypt.hashSync(password, 3);
+      const user = await User.create({ username, password: hashPassword, roles: [{ value: "BOSS", subordinates }] });
+
+      return res.status(200).json(user);
+    } catch(err) {
+      res.status(400).json({ message: 'registration error' });
+    }
+  }
+
 
   async login(req, res) {
     try {
@@ -63,15 +118,23 @@ class AuthController {
   async getUsers(req, res) {
 
     try {
-      const userRole = new Role();
-      const adminRole = new Role({ value: 'ADMIN' });
-      const bossRole = new Role({ value: 'BOSS' });
+      const { id, roles } = req.user;
+      let users = [];
 
-      await userRole.save();
-      await adminRole.save();
-      await bossRole.save();
-
-      const users = User.find();
+      if (roles.value === "ADMIN") {
+        users = await User.find();
+      }
+      if (roles.value === "BOSS") {
+        const mainUser = await User.findById(id);
+        users.push(mainUser);
+        roles.subordinates.forEach(async (subordinate) => {
+          subUser = await User.findOne({ username: subordinate });
+          users.push(subUser)
+        })
+      } else {
+        users = await User.findById(id);
+      }
+      console.log(users);
       
       res.status(200).json({ users });
     } catch(err) {
