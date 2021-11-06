@@ -18,7 +18,10 @@
   },
   "homepage": "https://github.com/Gal4enock/auth-register-server#readme",
   "dependencies": {
+    "bcrypt": "^5.0.1",
     "express": "^4.17.1",
+    "express-validator": "^6.13.0",
+    "jsonwebtoken": "^8.5.1",
     "mongoose": "^6.0.12",
     "nodemon": "^2.0.14"
   }
