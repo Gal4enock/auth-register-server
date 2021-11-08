@@ -72,12 +72,15 @@ class AuthController {
 
       const { username, password, subordinates } = req.body;
       const doubleUser = await User.findOne({ username });
-
+      
       if (doubleUser) {
         return res.status(400).json({ message: 'user already exist' });
       };
+      let subUsers = [];
+      console.log(subordinates);
       subordinates.forEach( async (subordinate) => {
         const isUserCreated = await User.findOne({ username: subordinate });
+        subUsers.push(isUserCreated._id)
         if (!isUserCreated) {
           const hashSubPassword = bcrypt.hashSync("Start123", 3);
           const subordinateUser = new User({ username: subordinate, password: hashSubPassword, roles: [{ value: "USER", boss: username }] });
@@ -85,10 +88,11 @@ class AuthController {
         }
       });
       const hashPassword = bcrypt.hashSync(password, 3);
-      const user = await User.create({ username, password: hashPassword, roles: [{ value: "BOSS", subordinates }] });
-
+      const user = await User.create({ username, password: hashPassword, role: { value: "BOSS"}, subordinates: subUsers });
+      
       return res.status(200).json(user);
-    } catch(err) {
+    } catch (err) {
+      console.log(err);
       res.status(400).json({ message: 'registration error' });
     }
   }
