@@ -28,7 +28,7 @@ class AuthController {
       };
 
       const hashPassword = bcrypt.hashSync(password, 3);
-      const user = new User({ username, password: hashPassword, roles: [{ value: "ADMIN" }] });
+      const user = new User({ username, password: hashPassword, roles: { value: "ADMIN" } });
 
       await user.save();
       return res.status(200).json(user);
@@ -53,7 +53,7 @@ class AuthController {
       };
 
       const hashPassword = bcrypt.hashSync(password, 3);
-      const user = new User({ username, password: hashPassword, roles: [{ value: "USER" }] });
+      const user = new User({ username, password: hashPassword, roles: { value: "USER" } });
 
       await user.save();
       return res.status(200).json(user);
@@ -80,12 +80,12 @@ class AuthController {
         const isUserCreated = await User.findOne({ username: subordinate });
         if (!isUserCreated) {
           const hashSubPassword = bcrypt.hashSync("Start123", 3);
-          const subordinateUser = new User({ username: subordinate, password: hashSubPassword, roles: [{ value: "USER", boss: username }] });
+          const subordinateUser = new User({ username: subordinate, password: hashSubPassword, roles: { value: "USER", boss: username } });
           await subordinateUser.save();
         }
       });
       const hashPassword = bcrypt.hashSync(password, 3);
-      const user = await User.create({ username, password: hashPassword, roles: [{ value: "BOSS", subordinates }] });
+      const user = await User.create({ username, password: hashPassword, roles: { value: "BOSS", subordinates } });
 
       return res.status(200).json(user);
     } catch(err) {
@@ -117,16 +117,15 @@ class AuthController {
   }
 
   async getUsers(req, res) {
-
     try {
-      let users = [];
       const { id, roles } = req.user;
-      if (roles[0].value === "ADMIN") {
+      let users = [];
+      if (roles.value === "ADMIN") {
         console.log('admin');
         users = await User.find();
       }
-      if (roles[0].value === "BOSS") {
-        users = await Promise.all(roles[0].subordinates
+      if (roles.value === "BOSS") {
+        users = await Promise.all(roles.subordinates
           .map((subordinate) => new Promise(async (resolve) => {
             const subUser = await User.findOne({ username: subordinate });
             resolve(subUser);
@@ -134,13 +133,55 @@ class AuthController {
         const mainUser = await User.findById(id);
         users.push(mainUser);
       }
-      if (roles[0].value === "USER") {
-        console.log('user');
+      if (roles.value === "USER") {
         users = await User.findById(id);
       }
       res.status(200).json({ users });
     } catch(err) {
-      res.status(400).json({message: "geterror"});
+      res.status(400).json({message: "You can't get information for now"});
+    }
+  }
+
+  async changeBoss(req, res) {
+    try {
+      const { nameBoss, nameSubUser } = req.body;
+      const { id, roles } = req.user;
+      const newBoss = await User.findOne({ username: nameBoss });
+      const subUser = await User.findOne({ username: nameSubUser });
+      if (!newBoss || !subUser) {
+        return res.status(400).json({
+          message: `${newBoss ? nameSubUser : nameBoss} is not registrated yet`
+        })
+      }
+      if (!roles.subordinates.includes(subUser)) {
+        return res.status(400).json({message: `Sorry, ${subUser} is not your subordinate`});
+      }
+      const index = roles.subordinates.indexOf(nameSubUser);
+      const subArr = roles.subordinates;
+      const boss = await User.findByIdAndUpdate(subUser._id,
+        {
+          $set: {
+            roles: {
+              value: "BOSS", subordinates: subArr.splice(index, 1)
+            }
+          }
+        },
+        { new: true },
+      );
+      const newSubUser = await User.findByIdAndUpdate(id,
+        {
+          $set: {
+            roles: {
+              value: "USER",
+              boss: nameBoss
+            }
+          }
+        },
+        { new: true },
+      );
+      res.status(200).json({ boss, newSubUser });
+    } catch (err) {
+      res.status(400).json({ message: "Something went wrong" });
     }
   }
 }
