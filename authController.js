@@ -110,7 +110,8 @@ class AuthController {
       const token = accessToken(user._id, user.roles);
       return res.json({ token });
 
-    } catch(err) {
+    } catch (err) {
+      console.log(err);
       res.status(400).json({ message: 'login error' });
     }
   }
@@ -118,27 +119,28 @@ class AuthController {
   async getUsers(req, res) {
 
     try {
-      const { id, roles } = req.user;
       let users = [];
-
-      if (roles.value === "ADMIN") {
+      const { id, roles } = req.user;
+      if (roles[0].value === "ADMIN") {
+        console.log('admin');
         users = await User.find();
       }
-      if (roles.value === "BOSS") {
+      if (roles[0].value === "BOSS") {
+        users = await Promise.all(roles[0].subordinates
+          .map((subordinate) => new Promise(async (resolve) => {
+            const subUser = await User.findOne({ username: subordinate });
+            resolve(subUser);
+          })));
         const mainUser = await User.findById(id);
         users.push(mainUser);
-        roles.subordinates.forEach(async (subordinate) => {
-          subUser = await User.findOne({ username: subordinate });
-          users.push(subUser)
-        })
-      } else {
+      }
+      if (roles[0].value === "USER") {
+        console.log('user');
         users = await User.findById(id);
       }
-      console.log(users);
-      
       res.status(200).json({ users });
     } catch(err) {
-
+      res.status(400).json({message: "geterror"});
     }
   }
 }
