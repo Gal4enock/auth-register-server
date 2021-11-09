@@ -1,12 +1,13 @@
 const jwt = require('jsonwebtoken');
-const { secret } = require('../config');
+const { secret } = require('../assets/config');
+const HttpCodes = require('../assets/constants');
 
 module.exports = function (roles) {
   return function (req, res, next) {
     try {
       const token = req.headers.authorization.split(' ')[1];
       if (!token) {
-        return res.status(403).json({message: 'You are not authorised'})
+        return res.status(HttpCodes.NOT_AUTORIZED).json({message: 'You are not authorised'})
       }
 
       const { roles: userRoles } = jwt.verify(token, secret);
@@ -17,12 +18,12 @@ module.exports = function (roles) {
         }
       
       if (!hasRoles) {
-        res.status(403).json({message: 'Access denied'})
+        res.status(HttpCodes.NOT_AUTORIZED).json({message: 'Access denied'})
       }
       next();
     } catch (err) {
       console.log(err);
-      res.status(403).json({message: 'You are not authorised'})
+      res.status(HttpCodes.NOT_AUTORIZED).json({message: 'You are not authorised'})
     }
   }
 }
