@@ -3,6 +3,7 @@ const { validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const User = require('./Models/User');
 const { secret } = require('./config');
+const HttpCodes = require('./assets/constants');
 
 const accessToken = (id, roles) => {
   const payload = {
@@ -17,23 +18,23 @@ class AuthController {
       const err = validationResult(req);
 
       if (!err.isEmpty()) {
-        return res.status(400).json({ message: "registration validation error", err });
+        return res.status(HttpCodes.BAD_REQUEST).json({ message: "registration validation error", err });
       };
 
       const { username, password } = req.body;
       const doubleUser = await User.findOne({ username });
 
       if (doubleUser) {
-        return res.status(400).json({ message: 'user already exist' });
+        return res.status(HttpCodes.BAD_REQUEST).json({ message: 'user already exist' });
       };
 
       const hashPassword = bcrypt.hashSync(password, 3);
       const user = new User({ username, password: hashPassword, roles: { value: "ADMIN" } });
 
       await user.save();
-      return res.status(200).json(user);
+      return res.status(HttpCodes.CREATED).json(user);
     } catch(err) {
-      res.status(400).json({ message: 'registration error' });
+      res.status(HttpCodes.BAD_REQUEST).json({ message: 'registration error' });
     }
   }
 
@@ -42,23 +43,30 @@ class AuthController {
       const err = validationResult(req);
 
       if (!err.isEmpty()) {
-        return res.status(400).json({ message: "registration validation error", err });
+        return res.status(HttpCodes.BAD_REQUEST).json({ message: "registration validation error", err });
       };
 
-      const { username, password } = req.body;
+      const { username, password, bossName } = req.body;
       const doubleUser = await User.findOne({ username });
-
+      const boss = await User.findOne({ username: bossName });
       if (doubleUser) {
-        return res.status(400).json({ message: 'user already exist' });
+        return res.status(HttpCodes.BAD_REQUEST).json({ message: 'user already exist' });
       };
+      if (!boss) {
+        return res.status(HttpCodes.BAD_REQUEST).json({message: `Sorry, but ${bossName} is not registrated yet`})
+      }
 
       const hashPassword = bcrypt.hashSync(password, 3);
-      const user = new User({ username, password: hashPassword, roles: { value: "USER" } });
+      const user = new User({
+        username, password: hashPassword, roles: {
+          value: "USER", boss: bossName
+        }
+      });
 
       await user.save();
-      return res.status(200).json(user);
+      return res.status(HttpCodes.CREATED).json(user);
     } catch(err) {
-      res.status(400).json({ message: 'registration error' });
+      res.status(HttpCodes.BAD_REQUEST).json({ message: 'registration error' });
     }
   }
 
@@ -67,17 +75,17 @@ class AuthController {
       const err = validationResult(req);
 
       if (!err.isEmpty()) {
-        return res.status(400).json({ message: "registration validation error", err });
+        return res.status(HttpCodes.BAD_REQUEST).json({ message: "registration validation error", err });
       };
 
       const { username, password, subordinates } = req.body;
       const doubleUser = await User.findOne({ username });
 
       if (doubleUser) {
-        return res.status(400).json({ message: 'user already exist' });
+        return res.status(HttpCodes.BAD_REQUEST).json({ message: 'user already exist' });
       };
-      subordinates.forEach( async (subordinate) => {
-        const isUserCreated = await User.findOne({ username: subordinate });
+        subordinates.forEach( async (subordinate) => {
+          const isUserCreated = await User.findOne({ username: subordinate });
         if (!isUserCreated) {
           const hashSubPassword = bcrypt.hashSync("Start123", 3);
           const subordinateUser = new User({ username: subordinate, password: hashSubPassword, roles: { value: "USER", boss: username } });
@@ -87,12 +95,12 @@ class AuthController {
       const hashPassword = bcrypt.hashSync(password, 3);
       const user = await User.create({ username, password: hashPassword, roles: { value: "BOSS", subordinates } });
 
-      return res.status(200).json(user);
-    } catch(err) {
-      res.status(400).json({ message: 'registration error' });
+      return res.status(HttpCodes.CREATED).json(user);
+    } catch (err) {
+      console.log(err);
+      res.status(HttpCodes.BAD_REQUEST).json({ message: 'registration error' });
     }
   }
-
 
   async login(req, res) {
     try {
@@ -100,19 +108,19 @@ class AuthController {
       const user = await User.findOne({ username });
 
       if (!user) {
-        return res.status(400).json({ message: `user ${username} not found` });
+        return res.status(HttpCodes.BAD_REQUEST).json({ message: `user ${username} not found` });
       }
 
       const isPasswordValid = bcrypt.compareSync(password, user.password);
       if (!isPasswordValid) {
-        return res.status(400).json({ message: 'wrong password' });
+        return res.status(HttpCodes.NOT_AUTORIZED).json({ message: 'wrong password' });
       }
       const token = accessToken(user._id, user.roles);
-      return res.json({ token });
+      return res.status(HttpCodes.OK).json({ token });
 
     } catch (err) {
       console.log(err);
-      res.status(400).json({ message: 'login error' });
+      res.status(HttpCodes.BAD_REQUEST).json({ message: 'login error' });
     }
   }
 
@@ -121,7 +129,6 @@ class AuthController {
       const { id, roles } = req.user;
       let users = [];
       if (roles.value === "ADMIN") {
-        console.log('admin');
         users = await User.find();
       }
       if (roles.value === "BOSS") {
@@ -136,9 +143,9 @@ class AuthController {
       if (roles.value === "USER") {
         users = await User.findById(id);
       }
-      res.status(200).json({ users });
+      res.status(HttpCodes.OK).json({ users });
     } catch(err) {
-      res.status(400).json({message: "You can't get information for now"});
+      res.status(HttpCodes.BAD_REQUEST).json({message: "You can't get information for now"});
     }
   }
 
@@ -149,20 +156,21 @@ class AuthController {
       const newBoss = await User.findOne({ username: nameBoss });
       const subUser = await User.findOne({ username: nameSubUser });
       if (!newBoss || !subUser) {
-        return res.status(400).json({
+        return res.status(HttpCodes.BAD_REQUEST).json({
           message: `${newBoss ? nameSubUser : nameBoss} is not registrated yet`
         })
       }
-      if (!roles.subordinates.includes(subUser)) {
-        return res.status(400).json({message: `Sorry, ${subUser} is not your subordinate`});
+      if (!roles.subordinates.includes(nameSubUser)) {
+        return res.status(HttpCodes.BAD_REQUEST).json({message: `Sorry, but ${nameSubUser} is not your subordinate`});
       }
       const index = roles.subordinates.indexOf(nameSubUser);
       const subArr = roles.subordinates;
-      const boss = await User.findByIdAndUpdate(subUser._id,
+      subArr.splice(index, 1);
+      const boss = await User.findByIdAndUpdate(id,
         {
           $set: {
             roles: {
-              value: "BOSS", subordinates: subArr.splice(index, 1)
+              value: "BOSS", subordinates: subArr
             }
           }
         },
@@ -179,9 +187,18 @@ class AuthController {
         },
         { new: true },
       );
-      res.status(200).json({ boss, newSubUser });
+      const newBossSubArr = newBoss.roles.subordinates.push(nameSubUser);
+      const newSubBoss = await User.findByIdAndUpdate(newBoss._id,
+        {
+          $set: {
+            roles: {
+            value: "BOSS", subordinates: newBossSubArr
+          }
+        }
+      })
+      res.status(HttpCodes.OK).json({ boss, newSubUser, newSubBoss});
     } catch (err) {
-      res.status(400).json({ message: "Something went wrong" });
+      res.status(HttpCodes.BAD_REQUEST).json({ message: "Something went wrong" });
     }
   }
 }

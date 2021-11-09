@@ -11,6 +11,6 @@ router.post('/boss_registration', validation(), authController.registrationBoss 
 router.post('/user_registration', validation(), authController.registrationUser);
 router.post('/login', authController.login);
 router.get('/users', authMiddleware, authController.getUsers);
-router.patch('/users',authMiddleware, roleMiddleware(['BOSS']), authController.changeBoss);
+router.patch('/users',authMiddleware, roleMiddleware('BOSS'), authController.changeBoss);
 
 module.exports = router;

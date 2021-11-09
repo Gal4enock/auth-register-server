@@ -12,16 +12,16 @@ module.exports = function (roles) {
       const { roles: userRoles } = jwt.verify(token, secret);
 
       let hasRoles = false;
-      userRoles.forEach(role => {
-        if (roles.includes(role.value)) {
+      if (userRoles.value === roles) {
           hasRoles = true;
         }
-      })
+      
       if (!hasRoles) {
         res.status(403).json({message: 'Access denied'})
       }
       next();
     } catch (err) {
+      console.log(err);
       res.status(403).json({message: 'You are not authorised'})
     }
   }
